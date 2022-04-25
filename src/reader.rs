@@ -1,5 +1,5 @@
 use isahc::{
-    http::{status::StatusCode, HeaderMap, HeaderValue},
+    http::{status::StatusCode},
     AsyncBody, AsyncReadResponseExt, Body, ReadResponseExt, Request, RequestExt,
 };
 
@@ -10,17 +10,16 @@ use crate::response::*;
 use crate::token::*;
 
 #[derive(Debug)]
-pub struct Writer<'a> {
+pub struct Reader<'a> {
     client: &'a Client,
-    token: Token<'a>,
 }
 
-impl<'a> Writer<'a> {
-    pub fn new(client: &'a Client, token: Token<'a>) -> Self {
-        Self { client, token }
+impl<'a> Reader<'a> {
+    pub fn new(client: &'a Client) -> Self {
+        Self { client }
     }
 
-    pub async fn post(&self, data: Vec<Data>) -> Result<Warp10Response> {
+    pub async fn post(&self, data: String) -> Result<Warp10Response> {
         let request = self.post_request::<AsyncBody>(data)?;
         let mut response = request.send_async().await?;
         let status = response.status();
@@ -29,7 +28,7 @@ impl<'a> Writer<'a> {
         self.handle_response(err, status, payload)
     }
 
-    pub fn post_sync(&self, data: Vec<Data>) -> Result<Warp10Response> {
+    pub fn post_sync(&self, data: String) -> Result<Warp10Response> {
         let request = self.post_request::<Body>(data)?;
         let mut response = request.send()?;
         let status = response.status();
@@ -38,20 +37,8 @@ impl<'a> Writer<'a> {
         self.handle_response(err, status, payload)
     }
 
-    fn post_request<T: From<String>>(&self, data: Vec<Data>) -> Result<Request<T>> {
-        let body = data
-            .iter()
-            .map(|d| d.warp10_serialize())
-            .fold(String::new(), |acc, cur| {
-                if acc.is_empty() {
-                    cur
-                } else {
-                    (acc + "\n") + &cur
-                }
-            });
-
-        let mut request = Request::post(self.client.update_uri()).body(T::from(body))?;
-        self.token.set_headers(request.headers_mut());
+    fn post_request<T: From<String>>(&self, data: String) -> Result<Request<T>> {
+        let mut request = Request::post(self.client.exec_uri()).body(T::from(data))?;
         Ok(request)
     }
 
